@@ -1,12 +1,13 @@
 const express = require('express');
 const moment = require('moment');
 const path = require('path');
-const { upload, imgExt } = require('../modules/multers');
+const { upload, imgExt } = require('../modules/multer');
 const { pool } = require('../modules/mysql-pool');
 const { err, alert, extName, srcPath } = require('../modules/util');
-const pagers = require('../modules/pagers');
+const pagers = require('../modules/pager');
+const { isUser, isGuest } = require('../modules/auth');
 const router = express.Router();
-const pugs = { 
+const pugs = {
 	css: 'board', 
 	js: 'board', 
 	title: 'Express Board', 
@@ -74,12 +75,12 @@ router.get(['/', '/list'], async (req, res, next) => {
 	}
 });
 
-router.get('/create', (req, res, next) => {
+router.get('/create', isUser, (req, res, next) => {
 	const pug = { ...pugs, tinyKey: process.env.TINY_KEY }
 	res.render('board/create', pug);
 });
 
-router.post('/save', upload.single('upfile'), async (req, res, next) => {
+router.post('/save', isUser, upload.single('upfile'), async (req, res, next) => {
 	try {
 		const { title, content, writer } = req.body;
 		let sql = 'INSERT INTO board SET title=?, content=?, writer=?';

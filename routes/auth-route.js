@@ -1,6 +1,7 @@
 const express = require('express');
 const { pool } = require('../modules/mysql-pool');
 const { err, alert } = require('../modules/util');
+const { isUser, isGuest } = require('../modules/auth');
 const bcrypt = require('bcrypt');
 const router = express.Router();
 
@@ -11,30 +12,52 @@ const pugs = {
 	headerTitle: 'Node/Express를 활용한 인증 구현' 
 }
 
-router.post('/logon', async (req, res, next) => {
+router.get('/logout', isUser, (req, res, next) => {
+	req.session.destroy();
+	req.app.locals.user = {};
+	res.redirect('/');
+});
+
+router.post('/logon', isGuest, async (req, res, next) => {
 	let msg = '아이디 혹은 패스워드를 확인하세요.';
 	let sql, value, r, rs, compare;
 	let { userid, userpw } = req.body;
-	sql = 'SELECT userpw FROM auth WHERE userid=?';
+	// SELECT userpw FROM auth WHERE userid='booldook';
+	sql = 'SELECT * FROM auth WHERE userid=?';
 	value = [userid];
 	r = await pool.query(sql, value);
 	if(r[0].length == 1) {
+		// 아이디가 존재해서 패스워드를 r[0][0].userpw 가져옴
 		compare = await bcrypt.compare(userpw + process.env.BCRYPT_SALT, r[0][0].userpw);
-		if(compare) res.send('로그인됨');
-		else res.send(alert(msg));
+		if(compare) {
+			// 패스워드도 일치
+			rs = r[0][0];
+			req.session.user = {
+				id: rs.id,
+				userid: rs.userid,
+				username: rs.username,
+				email: rs.email,
+			}
+			res.redirect('/');
+		}
+		else {
+			// 패스워드가 틀림
+			res.send(alert(msg));
+		}
 	}
 	else {
+		// 아이디가 존재하지 않음
 		res.send(alert(msg));
 	}
 });
 
-router.get('/login', (req, res, next) => {
+router.get('/login', isGuest, (req, res, next) => {
 	const pug = { ...pugs };
 	pug.headerTitle += ' - 회원 로그인';
 	res.render('auth/login', { ...pug });
 });
 
-router.post('/save', async (req, res, next) => {
+router.post('/save', isGuest, async (req, res, next) => {
 	try {
 		let { userid, userpw, username, email } = req.body;
 		let sql, value, r, rs;
@@ -65,14 +88,14 @@ router.post('/save', async (req, res, next) => {
 	}
 });
 
-router.get('/join', (req, res, next) => {
+router.get('/join', isGuest, (req, res, next) => {
 	const pug = { ...pugs };
 	pug.headerTitle += ' - 회원가입';
 	res.render('auth/join', { ...pug });
 });
 
 /*********** API ***********/
-router.get('/userid', async (req, res, next) => {
+router.get('/userid', isGuest, async (req, res, next) => {
 	try {
 		let sql, value, r, rs;
 		sql = 'SELECT userid FROM auth WHERE userid=?';
